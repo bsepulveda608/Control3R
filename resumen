@@ -1,0 +1,191 @@
+#################################################################
+## Test Z: Comparación de medias varianzas conocidas e iguales ##
+#################################################################
+
+## ¿Existe evidencia para afirmar que la estatura media de los habitantes 
+## de la I Región es inferior a la media de la IV Región? 
+## Suponga Normalidad y que sigma = 9. 
+## Concluya con un nivel de significancia del 5%.
+
+sigma = 9
+X = filter(Base, REGION == 1)$TALLA
+n = length(X)
+Y = filter(Base, REGION == 4)$TALLA
+m = length(Y)
+z.test(x = mean(X)-mean(Y), stdev = sigma*sqrt(1/n+1/m), alternative = "less")$p.value
+
+
+
+## En R tenemos la función lm()
+## Esta función nos entrega los estimadores de minimos cuadrados
+recta = lm(HG  ~ PESO, data = Base)
+abline(recta, col = "blue", lwd = 2)
+abline(h = mean(Base$HG), col = "blue", lty = 2, lwd = 2)
+## valor.p = 7.4% > 5% = alpha ---> No existe sufienciente evidencia 
+## para recahzar H0 y apoyar la afirmación que los medias de la I Región
+## son menores que los de la IV Región.
+
+#######################################################################
+## Test Z: Comparación de medias con varianzas conocidas y distintas ##
+#######################################################################
+
+## ¿Existe evidencia para afirmar que los niveles medios de GLUBASAL en 
+## hombres supera en 4 mg/dL a las de las mujeres? 
+## Asuma normalidad y que las desviaciones estandar de hombres y mujeres 
+## son 30.1 y 26.6 respectivamente. 
+## Concluya con un nivel de significancia del 10%.
+
+sigma.X = 30.1
+sigma.Y = 26.6
+X = filter(Base, SEXO == 1)$GLUBASAL
+n = length(X)
+Y = filter(Base, SEXO == 2)$GLUBASAL
+m = length(Y)
+
+delta0 = 4
+
+z.test(x = mean(X)-mean(Y), mu = delta0, stdev = sqrt(sigma.X^2/n+sigma.Y^2/m), alternative = "greater")$p.value
+
+
+######################################
+## Test F: Comparación de varianzas ##
+######################################
+
+## ¿Existe evidencia para afirmar que la CINTURA de los 
+## hombres es igualmente homogenia en zonas urbanas y rurales? 
+## Asuma normalidad y concluya con un nivel de significancia del 5%.
+
+X = filter(Base, SEXO == 1, ZONA == 1)$CINTURA
+Y = filter(Base, SEXO == 1, ZONA == 2)$CINTURA
+var.test(x = X, y = Y, alternative = "two.sided")$p.value
+
+########################################################################
+## Test T: Comparación de medias con varianzas desconocidas e iguales ##
+########################################################################
+
+## ¿Las medias de CINTURA entre hombres de zonas urbanas y rurales difieren? 
+## Asuma normalidad, varianzas iguales y concluya con un nivel de significancia del 5%.
+
+t.test(x = X, y = Y, var.equal = T, alternative = "two.sided")$p.value
+
+##################################################
+## Test de Comparación de Poblaciones Bernoulli ##
+##################################################
+
+## Test Z: Comparación de proporciones
+## H0: p.X = p.Y. vs H1: p.X > p.Y
+
+X = filter(Base, ZONA == 1)$FUMADOR
+n = length(X)
+Y = filter(Base, ZONA == 2)$FUMADOR
+m = length(Y)
+p = (n*mean(X)+m*mean(Y))/(n+m)
+
+z.test(x = mean(X)-mean(Y), stdev = sqrt(p*(1-p))*sqrt(1/n+1/m), alternative = "greater")$p.value
+#O#
+prop.test(x = c(sum(X), sum(Y)), n = c(n,m), correct = F, alternative = "greater")$p.value
+
+
+
+##############################
+## Test de Bondad de Ajuste ##
+##############################
+
+## ¿HDL ~ Gamma? 
+
+## Test chi-cuadrado:
+X = Base$HDL
+par = fitdist(X, distr = "gamma", method = "mle")$estimate
+hist(X, freq = F, col = "gray", border = "white", xlim = c(0,150), nclass = 5)
+x = seq(0,150,0.5)
+lines(dgamma(x, shape = par[1], rate = par[2])~x, lty = 2)
+
+## Considere los intervalos: 0-30,30-40, 40-50, 50-60, 60-70, 70-Inf
+aux = hist(X, breaks = c(0,30,40,50,60,70,Inf), plot = F)
+O = aux$counts
+y = aux$breaks
+k = length(O)
+p = diff(pgamma(y, shape = par[1], rate = par[2]))
+sum(p)
+n = sum(O)
+E = n*p
+d = sum((O-E)^2/E)
+d = as.numeric(chisq.test(x = O, p = p)$statistic)
+valor.p = 1-pchisq(d, df = k-1-2)
+cbind(d,valor.p)
+
+
+## Test KS:
+Fn = ecdf(X)
+x = sort(X)
+plot(Fn(x)~x, type = "s", bty = "n", main = "Acumulada Empírica", font.main = 1, las = 1)
+lines(pgamma(x, shape = par[1], rate = par[2])~x, lty = 2)
+d = max(abs(Fn(x)-pgamma(x, shape = par[1], rate = par[2])))
+ks.test(x, "pgamma", shape = par[1], rate = par[2])
+## Valor-p = 63.4% > 5% = alpha --> No rechazamos que HDL ~ Gamma.
+
+
+## ¿Qué porcentaje de variabilidad es explicado por el modelo lineal?
+var(Base$HG)
+summary(recta)$sigma^2 #O# summary(modelo2)$r.squared
+r2 = 1-summary(recta)$sigma^2/var(Base$HG) ## Coeficiemnte de detemrinación ajustado
+r2 ## El 92.56% de la variabilidad original ha desaparecido
+
+## Valores Ajustados vs Realea
+cor(modelo3$fitted.values,Base$ImacecMinero)^2
+summary(modelo3)$r.squared ## Se confirma que cor(Y', Y)^2 = R^2
+
+
+## El error será Normal?
+Z = modelo4$residuals
+
+## H0: Z ~ Normal
+X = sort(Z)
+Fn = ecdf(X)
+x = X
+plot(Fn(x)~x, type = "s", bty = "n", main = "Acumulada Empírica", font.main = 1, las = 1)
+lines(pnorm(x, mean = mean(Z), sd = sd(Z))~x, lty = 2)
+legend("topleft", c("Acumulada Empirica", "Acumulada Normal"), lty = 1:2, bty = "n", cex = 1.5)
+
+ks.test(Z, "pnorm", mean = mean(Z), sd = sd(Z))$p.value ## > 5% = alpha --> No rechazamos la Normalidad.
+
+
+## ¿Cuales son los coeficientes estimados de la recta?
+recta
+
+## Analicemos la salida:
+## Coefficients: Acá tenemos la recta estimada, 
+## estadisticos de prueba (t-value) y el 
+## valor-p de cada t-value
+## Si valor-p < alpha --> Se rechaza H0: beta[i]=0, i = 0,1
+
+## Residual standard error: Sy|x (desviasión 
+## estandar con respecto a la recta)
+
+## Adjusted R-squared: r2 (% de variabilidad 
+## explicada por el modelo) [Este es el coeficiente que recomiendo utilizar]
+
+## Multiple R-squared: R2 = 1 - SCE/SCT (% de 
+## variabilidad explicada por el modelo)
+
+## F-statistic = (SCR/1)/(SCE/(n-2)) ~ F(1,n-2)
+## H0: beta1 = 0 (No hay regresión) vs H1: beta1 !=0 (Hay regresión)
+## p-value: < 2.2e-16 ---> Se rechaza H0
+
+## Nota: En regresión simple
+## F-statistic = (t value)^2 de la pendiente
+
+## Tabla ANOVA
+anova(recta)
+## Esta tabla se utiliza para calcular el F-statistic
+
+
+
+
+
+##OTROS## 
+
+## Corregir la ultima fecha que esta incorrecta
+Base$Date[193] = as.Date("2019-12-31")
+tail(Base)
+
